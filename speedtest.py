@@ -488,10 +488,7 @@ if HTTPSConnection:
                 try:
                     kwargs = {}
                     if hasattr(ssl, 'SSLContext'):
-                        if self._tunnel_host:
-                            kwargs['server_hostname'] = self._tunnel_host
-                        else:
-                            kwargs['server_hostname'] = self.host
+                        kwargs['server_hostname'] = self._tunnel_host or self.host
                     self.sock = self._context.wrap_socket(self.sock, **kwargs)
                 except AttributeError:
                     self.sock = ssl.wrap_socket(self.sock)
@@ -667,9 +664,7 @@ def distance(origin, destination):
          math.cos(math.radians(lat2)) * math.sin(dlon / 2) *
          math.sin(dlon / 2))
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    d = radius * c
-
-    return d
+    return radius * c
 
 
 def build_user_agent():
@@ -704,11 +699,7 @@ def build_request(url, data=None, headers=None, bump='0', secure=False):
     else:
         schemed_url = url
 
-    if '?' in url:
-        delim = '&'
-    else:
-        delim = '?'
-
+    delim = '&' if '?' in url else '?'
     # WHO YOU GONNA CALL? CACHE BUSTERS!
     final_url = '%s%sx=%s.%s' % (schemed_url, delim,
                                  int(timeit.time.time() * 1000),
@@ -730,11 +721,7 @@ def catch_request(request, opener=None):
 
     """
 
-    if opener:
-        _open = opener.open
-    else:
-        _open = urlopen
-
+    _open = opener.open if opener else urlopen
     try:
         uh = _open(request)
         if request.get_full_url() != uh.geturl():
@@ -803,15 +790,8 @@ class HTTPDownloader(threading.Thread):
         self.starttime = start
         self.timeout = timeout
         self.i = i
-        if opener:
-            self._opener = opener.open
-        else:
-            self._opener = urlopen
-
-        if shutdown_event:
-            self._shutdown_event = shutdown_event
-        else:
-            self._shutdown_event = FakeShutdownEvent()
+        self._opener = opener.open if opener else urlopen
+        self._shutdown_event = shutdown_event or FakeShutdownEvent()
 
     def run(self):
         try:
@@ -840,11 +820,7 @@ class HTTPUploaderData(object):
         self.start = start
         self.timeout = timeout
 
-        if shutdown_event:
-            self._shutdown_event = shutdown_event
-        else:
-            self._shutdown_event = FakeShutdownEvent()
-
+        self._shutdown_event = shutdown_event or FakeShutdownEvent()
         self._data = None
 
         self.total = [0]
@@ -855,10 +831,11 @@ class HTTPUploaderData(object):
         IO = BytesIO or StringIO
         try:
             self._data = IO(
-                ('content1=%s' %
-                 (chars * multiplier)[0:int(self.length) - 9]
-                 ).encode()
+                (
+                    ('content1=%s' % (chars * multiplier)[: int(self.length) - 9])
+                ).encode()
             )
+
         except MemoryError:
             raise SpeedtestCLIError(
                 'Insufficient memory to pre-allocate upload data. Please '
@@ -897,15 +874,8 @@ class HTTPUploader(threading.Thread):
         self.timeout = timeout
         self.i = i
 
-        if opener:
-            self._opener = opener.open
-        else:
-            self._opener = urlopen
-
-        if shutdown_event:
-            self._shutdown_event = shutdown_event
-        else:
-            self._shutdown_event = FakeShutdownEvent()
+        self._opener = opener.open if opener else urlopen
+        self._shutdown_event = shutdown_event or FakeShutdownEvent()
 
     def run(self):
         request = self.request
@@ -950,10 +920,7 @@ class SpeedtestResults(object):
         self.download = download
         self.upload = upload
         self.ping = ping
-        if server is None:
-            self.server = {}
-        else:
-            self.server = server
+        self.server = {} if server is None else server
         self.client = client or {}
 
         self._share = None
@@ -961,11 +928,7 @@ class SpeedtestResults(object):
         self.bytes_received = 0
         self.bytes_sent = 0
 
-        if opener:
-            self._opener = opener
-        else:
-            self._opener = build_opener()
-
+        self._opener = opener or build_opener()
         self._secure = secure
 
     def __repr__(self):
@@ -1096,11 +1059,7 @@ class Speedtest(object):
 
         self._secure = secure
 
-        if shutdown_event:
-            self._shutdown_event = shutdown_event
-        else:
-            self._shutdown_event = FakeShutdownEvent()
-
+        self._shutdown_event = shutdown_event or FakeShutdownEvent()
         self.get_config()
         if config is not None:
             self.config.update(config)
@@ -1371,19 +1330,14 @@ class Speedtest(object):
         urlparts = urlparse(server)
 
         name, ext = os.path.splitext(urlparts[2])
-        if ext:
-            url = os.path.dirname(server)
-        else:
-            url = server
-
+        url = os.path.dirname(server) if ext else server
         request = build_request(url)
         uh, e = catch_request(request, opener=self._opener)
         if e:
             raise SpeedtestMiniConnectFailure('Failed to connect to %s' %
                                               server)
-        else:
-            text = uh.read()
-            uh.close()
+        text = uh.read()
+        uh.close()
 
         extension = re.findall('upload_?[Ee]xtension: "([^"]+)"',
                                text.decode())
@@ -1460,7 +1414,7 @@ class Speedtest(object):
             url = os.path.dirname(server['url'])
             stamp = int(timeit.time.time() * 1000)
             latency_url = '%s/latency.txt?x=%s' % (url, stamp)
-            for i in range(0, 3):
+            for i in range(3):
                 this_latency_url = '%s.%s' % (latency_url, i)
                 printer('%s %s' % ('GET', this_latency_url),
                         debug=True)
@@ -1786,11 +1740,7 @@ def parse_args():
                         help=ARG_SUPPRESS, default=ARG_SUPPRESS)
 
     options = parser.parse_args()
-    if isinstance(options, tuple):
-        args = options[0]
-    else:
-        args = options
-    return args
+    return options[0] if isinstance(options, tuple) else options
 
 
 def validate_optional_args(args):
@@ -1864,16 +1814,8 @@ def shell():
     if debug:
         DEBUG = True
 
-    if args.simple or args.csv or args.json:
-        quiet = True
-    else:
-        quiet = False
-
-    if args.csv or args.json:
-        machine_format = True
-    else:
-        machine_format = False
-
+    quiet = bool(args.simple or args.csv or args.json)
+    machine_format = bool(args.csv or args.json)
     # Don't set a callback if we are running quietly
     if quiet or debug:
         callback = do_nothing
@@ -1936,7 +1878,7 @@ def shell():
         else:
             printer('Selecting best server based on ping...', quiet)
         speedtest.get_best_server()
-    elif args.mini:
+    else:
         speedtest.get_best_server(speedtest.set_mini_server(args.mini))
 
     results = speedtest.results
